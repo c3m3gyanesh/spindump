@@ -30,7 +30,14 @@ spindump=$srcdir/spindump
 
 traces="trace_icmpv4_short
         trace_icmpv6_short
+        trace_dns_simple
+        trace_dns
         trace_ping_aggregate_average
+        trace_ping_bandwidthperiods1
+        trace_ping_bandwidthperiods2
+        trace_ping_bandwidthperiods3
+        trace_ping_bandwidthperiods4
+        trace_ping_bandwidthperiods5
         trace_tcp_short
         trace_tcp_short_json trace_dns
         trace_quic_v18_short_spin
@@ -46,6 +53,35 @@ traces="trace_icmpv4_short
         trace_quic_v22_picoquic_short
         trace_quic_v22_picoquic_long
         trace_quic_v22_picoquic_h3
+        trace_quic_v23_quant_2k
+        trace_quic_v23_picoquic_1k_versneg
+        trace_quic_v23_picoquic_5k
+        trace_quic_v23_picoquic_25k
+        trace_quic_v23_picoquic_25k_noh3
+        trace_quic_v23_picoquic_25k_keyupd
+        trace_quic_v23_picoquic_25k_cidchange
+        trace_quic_v23_picoquicquant_10k_versneg
+        trace_quic_v23_picoquicquant_10k_0rtt
+        trace_quic_v23_lsquic_simple
+        trace_quic_v23_lsquic_complex
+        trace_quic_v23_lsquic_fine
+        trace_quic_v23_aiortc
+        trace_quic_v23_aiortc_spin
+        trace_quic_v23_ats
+        trace_quic_v23_ats_retry
+        trace_quic_v23_ats_readdr
+        trace_quic_v23_msquic
+        trace_quic_v23_msquic_h3
+        trace_quic_v23_mvfst_h3
+        trace_quic_v23_ngtcp2
+        trace_quic_v23_cf
+        trace_quic_v23_pandora
+        trace_quic_v23_quiche
+        trace_quic_v23_quicly
+        trace_quic_v23_gquic
+        trace_quic_v23_quinn
+        trace_quic_v23_f5
+        trace_quic_v23_apple
         trace_quic_fail1_quant
         trace_quic_fail2_quant 
         trace_quic_google
@@ -54,7 +90,9 @@ traces="trace_icmpv4_short
         trace_quic_bug_ls 
         trace_tunnel_interface_ping
         trace_tcp_medium_snap80
-        trace_tcp_large_snap80"
+        trace_tcp_large_snap80
+        trace_ping_tooold
+        trace_empty"
 
 #
 # Loop through test cases
@@ -62,6 +100,7 @@ traces="trace_icmpv4_short
 
 RESULT=0
 FAILCTR=0
+FAILED=""
 unset CPUPROFILE
 
 for trace in $traces
@@ -74,6 +113,7 @@ do
     #
     
     pcap=$testdir/$trace.pcap
+    pcapng=$testdir/$trace.pcapng
     descr=$testdir/$trace.txt
     outpre=$testdir/$trace.out.pre
     out=$testdir/$trace.out
@@ -86,18 +126,23 @@ do
     then
         opts=`cat $optsfile`
     fi
-
+    if [ -f $pcapng ]
+    then
+        pcap=$pcapng
+    fi
+    
     #
     # Now run it!
     #
     
-    if $spindump --input-file $pcap --textual --format text $opts > $outpre
-    then
+    if $spindump --input-file $pcap --textual --format text --not-report-notes $opts > $outpre
+     then
         echo "  run ok..."
     else
         echo "**run failed"
         RESULT=1
         FAILCTR=`expr $FAILCTR + 1`
+        if [ "x$FAILED" = "x" ]; then FAILED=$trace; else FAILED=$FAILED" "$trace; fi
     fi
 
     #
@@ -108,6 +153,9 @@ do
     awk '
       /Event.: .delete./ { gsub(/ .Ts.: [0-9]+,/,""); print $0; next; }
       /Event.: .new.*H2NET.*/ { gsub(/ .Ts.: [0-9]+,/,""); print $0; next; }
+      /Event.: .new.*HOSTS.*/ { gsub(/ .Ts.: [0-9]+,/,""); print $0; next; }
+      /^H2NET.* new .*/ { gsub(/ at [0-9]+ /," "); print $0; next; }
+      /^HOSTS.* new .*/ { gsub(/ at [0-9]+ /," "); print $0; next; }
       /.*/ { print $0; next; }
     ' < $outpre > $out
     
@@ -122,6 +170,7 @@ do
         echo "**expected results file $corr does not exist"
         RESULT=1
         FAILCTR=`expr $FAILCTR + 1`
+        if [ "x$FAILED" = "x" ]; then FAILED=$trace; else FAILED=$FAILED" "$trace; fi
     fi
     
     if diff $out $corr > /dev/null
@@ -131,6 +180,7 @@ do
         echo "**results incorrect"
         RESULT=1
         FAILCTR=`expr $FAILCTR + 1`
+        if [ "x$FAILED" = "x" ]; then FAILED=$trace; else FAILED=$FAILED" "$trace; fi
     fi
     
     if [ -f $descr ]
@@ -140,6 +190,7 @@ do
         echo "**test description file $descr does not exist"
         RESULT=1
         FAILCTR=`expr $FAILCTR + 1`
+        if [ "x$FAILED" = "x" ]; then FAILED=$trace; else FAILED=$FAILED" "$trace; fi
     fi
 
     #
@@ -151,13 +202,14 @@ do
         CPUPROFILE=$profilefile
         export CPUPROFILE
         echo "  running performance tests..."
-        if $spindump --input-file $pcap --silent $opts > /dev/null
+        if $spindump --input-file $pcap --silent --not-report-notes $opts > /dev/null
         then
             echo "  run ok..."
         else
             echo "**run failed"
             RESULT=1
             FAILCTR=`expr $FAILCTR + 1`
+            if [ "x$FAILED" = "x" ]; then FAILED=$trace; else FAILED=$FAILED" "$trace; fi
         fi
         unset CPUPROFILE
     fi
@@ -170,7 +222,7 @@ done
 echo ''
 if [ $RESULT = 1 ]
 then
-    echo '**** some tests failed'
+    echo '**** some tests ('$FAILCTR', '$FAILED') failed'
 else
     echo 'all tests ok'
 fi

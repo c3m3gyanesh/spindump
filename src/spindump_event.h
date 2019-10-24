@@ -110,6 +110,7 @@ struct spindump_event_qrloss_measurement {
 };
 
 #define spindump_event_sessioidmaxlength   (18*2*2+1)
+#define spindump_event_notes_maxlength     20
 
 struct spindump_event {
   enum spindump_event_type eventType;
@@ -123,8 +124,9 @@ struct spindump_event {
   spindump_counter_64bit packetsFromSide2;
   spindump_counter_64bit bytesFromSide1;
   spindump_counter_64bit bytesFromSide2;
-  spindump_counter_32bit bandwidthFromSide1;
-  spindump_counter_32bit bandwidthFromSide2;
+  spindump_counter_64bit bandwidthFromSide1;
+  spindump_counter_64bit bandwidthFromSide2;
+  char notes[spindump_event_notes_maxlength];
   union {
     struct spindump_event_new_connection newConnection;
     struct spindump_event_change_connection changeConnection;
@@ -154,8 +156,9 @@ spindump_event_initialize(enum spindump_event_type eventType,
                           spindump_counter_64bit packetsFromSide2,
                           spindump_counter_64bit bytesFromSide1,
                           spindump_counter_64bit bytesFromSide2,
-                          spindump_counter_32bit bandwidthFromSide1,
-                          spindump_counter_32bit bandwidthFromSide2,
+                          spindump_counter_64bit bandwidthFromSide1,
+                          spindump_counter_64bit bandwidthFromSide2,
+                          const char* notes,
                           struct spindump_event* event);
 int
 spindump_event_equal(const struct spindump_event* event1,
